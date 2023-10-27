@@ -2,7 +2,7 @@
 - Lines longer than buffer size are not supported.
 - Log file encoding is ASCII and/or UTF-8.
 - EOL can be LF or CRLF.
-- Query param and/or POST form input.
+- Path + Query param input.
 - JSON output.
 
 # Request
@@ -28,13 +28,13 @@ _all fields are optional_
 - Also allow JSON input
 
 # Design
-- FileReaderConfig
+- LogReaderConfig
   - base\_dir : string (default "/var/log")
   - filename : string (default "syslog") _do not allow `--`_
   - buffer\_length : integer (default 16384)
   - ???
-- FileReader
-  - FileReaderConfig
+- LogReader
+  - LogReaderConfig
   - file\_size
   - buffer
   - start\_pos
@@ -42,14 +42,14 @@ _all fields are optional_
   - current\_sol
   - getNextLine()
   - endOfFile()
-- FilterConfig
+- LogFilterConfig
   - max\_matches : integer (default 0 unlimited)
   - match\_regex : string (defaut "")
   - start\_time : string (default "")
   - end\_time : string (default "")
   - time\_format : string (default "Mon DD HH:MM:SS")
-- Filter
-  - FilterConfig
+- LogFilter
+  - LogFilterConfig
   - match\_count : integer
   - last\_time : string (is there a native timestamp type?)
   - passes(line)

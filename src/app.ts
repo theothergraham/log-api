@@ -1,15 +1,20 @@
 // vim: ts=2:sts=2:sw=2:et:ai
 
 import express from "express";
+import { LogReader } from "./LogReader";
 
 const app = express();
 
 // define a route handler for the default home page
 app.get("/greeter", (req, res) => {
-    let { name } = req.query;
-    name ??= "API User";
-    //res.send(`Hello, ${name}!`);
-    res.send({ "greeting": "Hello", "target": name })
+  let { name } = req.query;
+  name ??= "API User";
+  res.send({ "greeting": "Hello", "target": name })
+});
+
+app.get("/log", (req, res) => {
+  const lr = new LogReader();
+  res.send(lr.getLastLine());
 });
 
 export default app;
