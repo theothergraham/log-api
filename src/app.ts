@@ -14,7 +14,14 @@ app.get("/greeter", (req, res) => {
 
 app.get("/log", (req, res) => {
   const lr = new LogReader();
-  res.send(lr.getLastLine());
+  // TODO ugly loop but can probably clean up with a proper iterator
+  const lines = [];
+  let line = lr.getNextLine();
+  while (line) {
+    lines.push(line);
+    line = lr.getNextLine();
+  }
+  res.send({ results: lines });
 });
 
 export default app;
