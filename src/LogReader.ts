@@ -3,31 +3,37 @@
 import { statSync, openSync, readSync, closeSync } from 'fs';
 import { EOL } from 'os';
 
+import { LogReaderConfig } from "./LogReaderConfig";
+
 // TODO make a lot of this private, maybe some readonly.
 
 export class LogReader {
-  // TODO config : LogReaderConfig
+  config : LogReaderConfig;
   fileName : string;
   fileSize : number;
   filePosition : number;
   fd : number;
   buffer : Buffer;
-  bufferSize : number;
   bufferPosition : number;
 
   constructor() {
-    // TODO get from config
-    this.bufferSize = 16384;
-    this.buffer = Buffer.alloc(this.bufferSize);
+    this.config = new LogReaderConfig();
+
+    this.buffer = Buffer.alloc(this.config.bufferSize);
     this.bufferPosition = -1;
 
-    // TODO get from request or config
-    this.fileName = "/tmp/test_file";
+    // TODO get from request
+    this.fileName = "test_file";
+    if (this.isBadFileName(this.fileName)) {
+      throw new Error(`bad filename '${this.fileName}'`);
+    }
 
-    const fileStat = statSync(this.fileName);
+    const fileNameWithPath = this.config.baseDir + '/' + this.fileName;
+
+    const fileStat = statSync(fileNameWithPath);
     this.fileSize = fileStat.size;
 
-    this.fd = openSync(this.fileName, 'r');
+    this.fd = openSync(fileNameWithPath, 'r');
     this.filePosition = -1;
   }
 
@@ -37,11 +43,16 @@ export class LogReader {
     closeSync(this.fd);
   }
 
+  isBadFileName(fileName : string) : boolean {
+    const regex = new RegExp('(^|/)\.\.(/|$)');
+    return regex.test(fileName);
+  }
+
   loadBuffer(endingAt : number) {
     if (endingAt > this.fileSize) {
       throw new Error(`bad position ${endingAt} for file size ${this.fileSize}`);
     }
-    const startingAt = Math.max(0, endingAt - this.bufferSize);
+    const startingAt = Math.max(0, endingAt - this.config.bufferSize);
     const loadBytes = endingAt - startingAt;
     const bytesRead = readSync(this.fd, this.buffer, 0, loadBytes, startingAt);
     if (bytesRead !== loadBytes) {
