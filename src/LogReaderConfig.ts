@@ -1,10 +1,5 @@
 // vim: ts=2:sts=2:sw=2:et:ai
 
-import dotenv from "dotenv";
-
-// initialize configuration
-dotenv.config();
-
 export class LogReaderConfig {
   baseDir : string;
   bufferSize : number;

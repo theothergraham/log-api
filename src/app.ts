@@ -24,4 +24,16 @@ app.get("/log", (req, res) => {
   res.send({ results: lines });
 });
 
+app.get('/log/:logfile', (req, res) => {
+  const lr = new LogReader(req.params.logfile);
+  // TODO ugly loop but can probably clean up with a proper iterator
+  const lines = [];
+  let line = lr.getNextLine();
+  while (line) {
+    lines.push(line);
+    line = lr.getNextLine();
+  }
+  res.send({ results: lines });
+});
+
 export default app;

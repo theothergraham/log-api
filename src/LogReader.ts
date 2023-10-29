@@ -16,14 +16,14 @@ export class LogReader {
   buffer : Buffer;
   bufferPosition : number;
 
-  constructor() {
+  constructor(fileName? : string) {
     this.config = new LogReaderConfig();
 
     this.buffer = Buffer.alloc(this.config.bufferSize);
     this.bufferPosition = -1;
 
-    // TODO get from request
-    this.fileName = "test_file";
+    this.fileName = fileName;
+    this.fileName ??= "test_file";
     if (this.isBadFileName(this.fileName)) {
       throw new Error(`bad filename '${this.fileName}'`);
     }

@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 import app from "./app";
 
 // initialize configuration
-dotenv.config();
+dotenv.config({ path: 'env' });
 
 const port = process.env.SERVER_PORT;
 
