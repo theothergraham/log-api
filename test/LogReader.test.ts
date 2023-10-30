@@ -8,45 +8,53 @@ import { LogReader } from "../src/LogReader";
 describe("LogReader", () => {
   test("one line", () => {
     const lr = new LogReader("one_line.log");
-    expect(lr.getNextLine()).toBe("Just one line.");
-    expect(lr.getNextLine()).toBeNull();
+    expect([...lr]).toEqual([
+      "Just one line."
+    ]);
   });
 
   test("incomplete last line", () => {
     const lr = new LogReader("incomplete.log");
-    expect(lr.getNextLine()).toBe("Full line.");
+    expect([...lr]).toEqual([
+      "Full line."
+    ]);
   });
 
   test("two lines", () => {
     const lr = new LogReader("two_lines.log");
-    expect(lr.getNextLine()).toBe("Just one line.");
-    expect(lr.getNextLine()).toBe("Actually two.");
-    expect(lr.getNextLine()).toBeNull();
+    expect([...lr]).toEqual([
+      "Just one line.",
+      "Actually two."
+    ]);
   });
 
   test("cross buffer boundary", () => {
     const lr = new LogReader("cross_buffers.log");
-    expect(lr.getNextLine()).toBe("This is in the first buffer.");
-    expect(lr.getNextLine()).toBe("This crosses boundary.");
-    expect(lr.getNextLine()).toBe("This does not.");
+    expect([...lr]).toEqual([
+      "This is in the first buffer.",
+      "This crosses boundary.",
+      "This does not."
+    ]);
   });
 
   test("longest line allowed", () => {
     const lr = new LogReader("longest_line.log");
-    expect(lr.getNextLine()).toBe("Because EOL must be found on each end.");
-    expect(lr.getNextLine()).toBe("Each line is the longest that fits ok.");
-    expect(lr.getNextLine()).toBe("12345678901234567890123456789012345678");
+    expect([...lr]).toEqual([
+      "Because EOL must be found on each end.",
+      "Each line is the longest that fits ok.",
+      "12345678901234567890123456789012345678"
+    ]);
   });
 
   test("line too long", () => {
     const lr = new LogReader("line_too_long.log");
-    expect(() => { lr.getNextLine(); }).toThrow();
+    expect(() => { lr.next(); }).toThrow();
   });
 
   test("second line too long", () => {
     const lr = new LogReader("line_too_long_2.log");
-    expect(lr.getNextLine()).toBe("Short line.");
-    expect(() => { lr.getNextLine(); }).toThrow();
+    expect(lr.next()).toEqual({ value: "Short line." });
+    expect(() => { lr.next(); }).toThrow();
   });
 });
 

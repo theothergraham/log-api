@@ -8,7 +8,7 @@ import { logger } from "./AppLogger";
 
 // TODO make a lot of this private, maybe some readonly.
 
-export class LogReader {
+export class LogReader implements IterableIterator<string> {
   config : LogReaderConfig;
   fileName : string;
   fileNameWithPath : string;
@@ -16,6 +16,10 @@ export class LogReader {
   filePosition : number;
   buffer : Buffer;
   bufferPosition : number;
+
+  [Symbol.iterator]() {
+    return this;
+  }
 
   constructor(fileName? : string) {
     this.config = new LogReaderConfig();
@@ -66,8 +70,7 @@ export class LogReader {
   // what happens when UTF-8 multi-byte char crosses a buffer boundary and
   // we try to convert the buffer to a string.
 
-  // TODO Maybe could be an interator that yields lines?
-  getNextLine() : string | null {
+  next() : IteratorResult<string, number | undefined> {
     let lineEnd : number = 0;
     let lineStart : number = 0;
 
@@ -78,7 +81,7 @@ export class LogReader {
     if (this.bufferPosition === 0) {
       if (this.filePosition === 0) {
         // We hit the beginning of the file, there are no more lines.
-        return null;
+        return { value: undefined, done: true };
       } else {
         // We need to load the next buffer.
         this.loadBuffer(this.filePosition + this.bufferPosition + EOL.length);
@@ -100,14 +103,14 @@ export class LogReader {
       } else {
         // re-load buffer so it ends at the first EOL
         this.loadBuffer(this.filePosition + this.bufferPosition + EOL.length);
-        return this.getNextLine();
+        return this.next();
       }
     } else {
       this.bufferPosition = lineStart;
       lineStart += EOL.length;
     }
 
-    return this.buffer.toString('utf8', lineStart, lineEnd);
+    return { value: this.buffer.toString('utf8', lineStart, lineEnd) };
   }
 }
 
