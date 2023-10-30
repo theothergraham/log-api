@@ -62,9 +62,12 @@ export class LogReader {
     this.filePosition = startingAt;
   }
 
-  // TODO Needs unit tests.
+  // Might be able to simplify by using string.split(), but not sure about
+  // what happens when UTF-8 multi-byte char crosses a buffer boundary and
+  // we try to convert the buffer to a string.
+
   // TODO Maybe could be an interator that yields lines?
-  getNextLine() {
+  getNextLine() : string | null {
     let lineEnd : number = 0;
     let lineStart : number = 0;
 
@@ -73,6 +76,7 @@ export class LogReader {
     }
 
     if (this.filePosition === 0 && this.bufferPosition === 0) {
+      // We hit the beginning of the file, there are no more lines.
       return null;
     }
 
@@ -88,14 +92,15 @@ export class LogReader {
         lineStart = 0;
         this.bufferPosition = 0;
       } else {
-        throw new Error("TODO load next buffer")
+        // re-load buffer so it ends at the first EOL
+        this.loadBuffer(this.filePosition + this.bufferPosition + EOL.length);
+        return this.getNextLine();
       }
     } else {
       this.bufferPosition = lineStart;
       lineStart += EOL.length;
     }
 
-    console.log(`start: ${lineStart}, end: ${lineEnd}`);
     return this.buffer.toString('utf8', lineStart, lineEnd);
   }
 }

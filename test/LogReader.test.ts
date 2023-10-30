@@ -29,5 +29,15 @@ describe("LogReader", () => {
     const line3 = lr.getNextLine();
     expect(line3).toBeNull();
   });
+
+  test("cross buffer boundary", () => {
+    const lr = new LogReader("cross_buffers.log");
+    const line1 = lr.getNextLine();
+    expect(line1).toBe("This is in the first buffer.");
+    const line2 = lr.getNextLine();
+    expect(line2).toBe("This crosses buffer boundary.");
+    const line3 = lr.getNextLine();
+    expect(line3).toBe("This does not.");
+  });
 });
 
