@@ -4,15 +4,16 @@ import { statSync, openSync, readSync, closeSync } from 'fs';
 import { EOL } from 'os';
 
 import { LogReaderConfig } from "./LogReaderConfig";
+import { logger } from "./AppLogger";
 
 // TODO make a lot of this private, maybe some readonly.
 
 export class LogReader {
   config : LogReaderConfig;
   fileName : string;
+  fileNameWithPath : string;
   fileSize : number;
   filePosition : number;
-  fd : number;
   buffer : Buffer;
   bufferPosition : number;
 
@@ -28,19 +29,12 @@ export class LogReader {
       throw new Error(`bad filename '${this.fileName}'`);
     }
 
-    const fileNameWithPath = this.config.baseDir + '/' + this.fileName;
+    this.fileNameWithPath = this.config.baseDir + '/' + this.fileName;
 
-    const fileStat = statSync(fileNameWithPath);
+    const fileStat = statSync(this.fileNameWithPath);
     this.fileSize = fileStat.size;
 
-    this.fd = openSync(fileNameWithPath, 'r');
     this.filePosition = -1;
-  }
-
-  // TODO this is bogus, TS does not have destructors. So how/when can we call closeSync()?!
-  //      maybe put the open and close in the iterator?
-  destructor() {
-    closeSync(this.fd);
   }
 
   isBadFileName(fileName : string) : boolean {
@@ -49,17 +43,23 @@ export class LogReader {
   }
 
   loadBuffer(endingAt : number) {
+    // TODO inefficient to keep opening and closing the file, but the only way to reliably close
+    // the file without a destructor is to keep it contained here.
+    const fd = openSync(this.fileNameWithPath, 'r');
     if (endingAt > this.fileSize) {
       throw new Error(`bad position ${endingAt} for file size ${this.fileSize}`);
     }
     const startingAt = Math.max(0, endingAt - this.config.bufferSize);
     const loadBytes = endingAt - startingAt;
-    const bytesRead = readSync(this.fd, this.buffer, 0, loadBytes, startingAt);
+    const bytesRead = readSync(fd, this.buffer, 0, loadBytes, startingAt);
     if (bytesRead !== loadBytes) {
       throw new Error(`readSync() requested ${loadBytes} from position ${startingAt} of ${this.fileSize}, but got ${bytesRead}`);
     }
-    this.bufferPosition = loadBytes;
+    this.bufferPosition = loadBytes - 1;
     this.filePosition = startingAt;
+    closeSync(fd);
+
+    logger.debug(`loaded ${loadBytes} from ${startingAt} to ${endingAt}:\n${this.buffer.toString()}`);
   }
 
   // Might be able to simplify by using string.split(), but not sure about
@@ -75,9 +75,14 @@ export class LogReader {
       this.loadBuffer(this.fileSize);
     }
 
-    if (this.filePosition === 0 && this.bufferPosition === 0) {
-      // We hit the beginning of the file, there are no more lines.
-      return null;
+    if (this.bufferPosition === 0) {
+      if (this.filePosition === 0) {
+        // We hit the beginning of the file, there are no more lines.
+        return null;
+      } else {
+        // We need to load the next buffer.
+        this.loadBuffer(this.filePosition + this.bufferPosition + EOL.length);
+      }
     }
 
     lineEnd = this.buffer.lastIndexOf(EOL, this.bufferPosition);
@@ -86,6 +91,7 @@ export class LogReader {
     }
 
     lineStart = this.buffer.lastIndexOf(EOL, lineEnd - 1);
+    logger.debug(`got lineEnd ${lineEnd} and lineStart ${lineStart}`);
     if (lineStart === -1) {
       if (this.filePosition === 0) {
         // first line in file
