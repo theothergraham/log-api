@@ -2,6 +2,7 @@
 
 import express, { Request, Response, RequestHandler } from "express";
 import { LogReader } from "./LogReader";
+import { LogFilter } from "./LogFilter";
 
 const app = express();
 
@@ -15,8 +16,9 @@ app.get("/greeter", (req, res) => {
 app.get('/log/:logfile', (async (req, res, next) => {
   try {
     const lr = LogReader(req.params.logfile);
+    const filter = new LogFilter(lr, req.query);
     const lines = [];
-    for await (const line of lr) {
+    for await (const line of filter) {
       lines.push(line);
     }
     res.send({ success: true, results: lines });

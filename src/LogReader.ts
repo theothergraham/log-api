@@ -16,7 +16,7 @@ const isBadFileName = (fileName : string) : boolean => {
   return regex.test(fileName);
 }
 
-export const LogReader = async function*(fileName: string) {
+export const LogReader = async function*(fileName: string) : AsyncGenerator<string> {
   // init
   const config = new LogReaderConfig();
 
