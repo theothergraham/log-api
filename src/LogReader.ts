@@ -70,6 +70,7 @@ export class LogReader implements IterableIterator<string> {
   // what happens when UTF-8 multi-byte char crosses a buffer boundary and
   // we try to convert the buffer to a string.
 
+  // TODO should turn this into an async generator?!
   next() : IteratorResult<string, number | undefined> {
     let lineEnd : number = 0;
     let lineStart : number = 0;
@@ -103,7 +104,16 @@ export class LogReader implements IterableIterator<string> {
       } else {
         // re-load buffer so it ends at the first EOL
         this.loadBuffer(this.filePosition + this.bufferPosition + EOL.length);
-        return this.next();
+        lineEnd = this.buffer.lastIndexOf(EOL, this.bufferPosition);
+        if (lineEnd === -1) {
+          throw new Error("no line terminator found in buffer");
+        }
+        lineStart = this.buffer.lastIndexOf(EOL, lineEnd - 1);
+        if (lineStart === -1) {
+          throw new Error("line too long");
+        }
+        this.bufferPosition = lineStart;
+        lineStart += EOL.length;
       }
     } else {
       this.bufferPosition = lineStart;

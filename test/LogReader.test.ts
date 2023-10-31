@@ -54,7 +54,7 @@ describe("LogReader", () => {
   test("second line too long", () => {
     const lr = new LogReader("line_too_long_2.log");
     expect(lr.next()).toEqual({ value: "Short line." });
-    expect(() => { lr.next(); }).toThrow();
+    expect(() => { lr.next(); }).toThrow(/line too long/);
   });
 });
 
