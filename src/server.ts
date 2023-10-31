@@ -3,7 +3,9 @@ import dotenv from "dotenv";
 import app from "./app";
 
 // initialize configuration
-dotenv.config({ path: 'env' });
+let serverEnv = process.env.SERVER_ENV;
+serverEnv ??= 'env';
+dotenv.config({ path: serverEnv });
 
 const port = process.env.SERVER_PORT;
 

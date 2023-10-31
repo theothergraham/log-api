@@ -1,6 +1,6 @@
 // vim: ts=2:sts=2:sw=2:et:ai
 
-import express from "express";
+import express, { Request, Response, RequestHandler } from "express";
 import { LogReader } from "./LogReader";
 
 const app = express();
@@ -12,13 +12,25 @@ app.get("/greeter", (req, res) => {
   res.send({ "greeting": "Hello", "target": name })
 });
 
-app.get('/log/:logfile', (req, res) => {
-  const lr = new LogReader(req.params.logfile);
-  const lines = [];
-  for (const line of lr) {
-    lines.push(line);
+app.get('/log/:logfile', (async (req, res, next) => {
+  try {
+    const lr = LogReader(req.params.logfile);
+    const lines = [];
+    for await (const line of lr) {
+      lines.push(line);
+    }
+    res.send({ success: true, results: lines });
+  } catch (e) {
+    next(e);
   }
-  res.send({ results: lines });
+}) as RequestHandler);
+
+// error handler
+app.use((err: Error, req: Request, res: Response) => {
+  res.status(500).json({
+    error: err.message,
+    success: false,
+  });
 });
 
 export default app;

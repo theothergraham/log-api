@@ -1,126 +1,102 @@
 // vim: ts=2:sts=2:sw=2:et:ai
 
-import { statSync, openSync, readSync, closeSync } from 'fs';
+import { open, stat } from 'fs/promises';
 import { EOL } from 'os';
 
 import { LogReaderConfig } from "./LogReaderConfig";
 import { logger } from "./AppLogger";
 
-// TODO make a lot of this private, maybe some readonly.
+// TODO distinguish internal state sanity checks from external errors (e.g. line too long)
+const assert = (condition: boolean, msg?: string) => {
+  if (condition === false) throw new Error(msg);
+}
 
-export class LogReader implements IterableIterator<string> {
-  config : LogReaderConfig;
-  fileName : string;
-  fileNameWithPath : string;
-  fileSize : number;
-  filePosition : number;
-  buffer : Buffer;
-  bufferPosition : number;
+const isBadFileName = (fileName : string) : boolean => {
+  const regex = new RegExp('(^|/)\.\.(/|$)');
+  return regex.test(fileName);
+}
 
-  [Symbol.iterator]() {
-    return this;
+export const LogReader = async function*(fileName: string) {
+  // init
+  const config = new LogReaderConfig();
+
+  if (isBadFileName(fileName)) {
+    throw new Error(`bad filename '${fileName}'`);
   }
+  const fileNameWithPath = config.baseDir + '/' + fileName;
 
-  constructor(fileName? : string) {
-    this.config = new LogReaderConfig();
+  const buffer = Buffer.alloc(config.bufferSize);
+  let bufferPosition = -1;
 
-    this.buffer = Buffer.alloc(this.config.bufferSize);
-    this.bufferPosition = -1;
+  const fileStat = await stat(fileNameWithPath);
+  const fileSize = fileStat.size;
 
-    this.fileName = fileName;
-    this.fileName ??= "test_file";
-    if (this.isBadFileName(this.fileName)) {
-      throw new Error(`bad filename '${this.fileName}'`);
-    }
+  const fh = await open(fileNameWithPath, 'r');
+  let filePosition = 0;
 
-    this.fileNameWithPath = this.config.baseDir + '/' + this.fileName;
+  // Loads the buffer with the block of bytes ending at the supplied position.
+  // If there are too few bytes left in the file to fill the buffer, the bytes
+  // loaded will be at the beginning of the buffer and the remainder will be
+  // cleared for safety.
+  const loadBuffer = async (endingAt: number) => {
+    assert(endingAt <= fileSize, `bad position ${endingAt} for file size ${fileSize}`);
 
-    const fileStat = statSync(this.fileNameWithPath);
-    this.fileSize = fileStat.size;
-
-    this.filePosition = -1;
-  }
-
-  isBadFileName(fileName : string) : boolean {
-    const regex = new RegExp('(^|/)\.\.(/|$)');
-    return regex.test(fileName);
-  }
-
-  loadBuffer(endingAt : number) {
-    // TODO inefficient to keep opening and closing the file, but the only way to reliably close
-    // the file without a destructor is to keep it contained here.
-    const fd = openSync(this.fileNameWithPath, 'r');
-    if (endingAt > this.fileSize) {
-      throw new Error(`bad position ${endingAt} for file size ${this.fileSize}`);
-    }
-    const startingAt = Math.max(0, endingAt - this.config.bufferSize);
+    const startingAt = Math.max(0, endingAt - config.bufferSize);
     const loadBytes = endingAt - startingAt;
-    const bytesRead = readSync(fd, this.buffer, 0, loadBytes, startingAt);
-    if (bytesRead !== loadBytes) {
-      throw new Error(`readSync() requested ${loadBytes} from position ${startingAt} of ${this.fileSize}, but got ${bytesRead}`);
-    }
-    this.bufferPosition = loadBytes - 1;
-    this.filePosition = startingAt;
-    closeSync(fd);
 
-    logger.debug(`loaded ${loadBytes} from ${startingAt} to ${endingAt}:\n${this.buffer.toString()}`);
+    const { bytesRead  } = await fh.read(buffer, 0, loadBytes, startingAt);
+    assert(bytesRead === loadBytes, `fh.read() requested ${loadBytes} from position ${startingAt} of ${fileSize}, but got ${bytesRead}`);
+
+    bufferPosition = loadBytes - 1;
+    filePosition = startingAt;
+
+    if (loadBytes < config.bufferSize) {
+      buffer.fill(0, loadBytes);
+    }
+
+    logger.debug(`loaded ${loadBytes} from ${startingAt} to ${endingAt}:\n${buffer.toString()}`);
   }
 
-  // Might be able to simplify by using string.split(), but not sure about
-  // what happens when UTF-8 multi-byte char crosses a buffer boundary and
-  // we try to convert the buffer to a string.
+  try {
+    await loadBuffer(fileSize);
 
-  // TODO should turn this into an async generator?!
-  next() : IteratorResult<string, number | undefined> {
-    let lineEnd : number = 0;
-    let lineStart : number = 0;
-
-    if (this.filePosition === -1) {
-      this.loadBuffer(this.fileSize);
-    }
-
-    if (this.bufferPosition === 0) {
-      if (this.filePosition === 0) {
-        // We hit the beginning of the file, there are no more lines.
-        return { value: undefined, done: true };
-      } else {
-        // We need to load the next buffer.
-        this.loadBuffer(this.filePosition + this.bufferPosition + EOL.length);
+    while (filePosition > 0 || bufferPosition > 0) {
+      const lineEnd = buffer.lastIndexOf(EOL, bufferPosition);
+      assert(lineEnd >= 0, "no line terminator found in buffer");
+      if (lineEnd === 0) {
+        // we cannot scan backwards from 0, so load the next buffer
+        const endingAt = filePosition + bufferPosition + EOL.length;
+        await loadBuffer(endingAt);
+        continue;
       }
-    }
 
-    lineEnd = this.buffer.lastIndexOf(EOL, this.bufferPosition);
-    if (lineEnd === -1) {
-      throw new Error("no line terminator found in buffer");
-    }
+      let lineStart = buffer.lastIndexOf(EOL, lineEnd - 1);
+      logger.debug(`found lineEnd ${lineEnd} and lineStart ${lineStart}`);
 
-    lineStart = this.buffer.lastIndexOf(EOL, lineEnd - 1);
-    logger.debug(`got lineEnd ${lineEnd} and lineStart ${lineStart}`);
-    if (lineStart === -1) {
-      if (this.filePosition === 0) {
-        // first line in file
-        lineStart = 0;
-        this.bufferPosition = 0;
+      if (lineStart < 0) {
+        if (filePosition === 0) {
+          // first line in file
+          lineStart = 0;
+          bufferPosition = 0;
+        } else if (lineEnd === config.bufferSize - 1) {
+          // the line is longer than the buffer
+          throw new Error('line too long');
+        } else {
+          const endingAt = filePosition + bufferPosition + EOL.length;
+          await loadBuffer(endingAt);
+          continue;
+        }
       } else {
-        // re-load buffer so it ends at the first EOL
-        this.loadBuffer(this.filePosition + this.bufferPosition + EOL.length);
-        lineEnd = this.buffer.lastIndexOf(EOL, this.bufferPosition);
-        if (lineEnd === -1) {
-          throw new Error("no line terminator found in buffer");
-        }
-        lineStart = this.buffer.lastIndexOf(EOL, lineEnd - 1);
-        if (lineStart === -1) {
-          throw new Error("line too long");
-        }
-        this.bufferPosition = lineStart;
+        bufferPosition = lineStart;
         lineStart += EOL.length;
       }
-    } else {
-      this.bufferPosition = lineStart;
-      lineStart += EOL.length;
-    }
 
-    return { value: this.buffer.toString('utf8', lineStart, lineEnd) };
+      const result = buffer.toString('utf8', lineStart, lineEnd);
+      logger.debug(`after adjustments, found lineEnd ${lineEnd} and lineStart ${lineStart}: ${result}`);
+      yield result;
+    }
+  } finally {
+    await fh.close();
   }
 }
 
