@@ -5,10 +5,7 @@ export class LogReaderConfig {
   bufferSize : number;
 
   constructor() {
-    this.baseDir = process.env.BASE_DIR;
-    this.baseDir ??= "/var/log"
-
-    this.bufferSize = parseInt(process.env.BUFFER_SIZE, 10);
-    this.bufferSize ??= 16384;
+    this.baseDir = 'BASE_DIR' in process.env ? process.env.BASE_DIR : "/var/log";
+    this.bufferSize = 'BUFFER_SIZE' in process.env ? parseInt(process.env.BUFFER_SIZE, 10) : 16384;
   }
 }

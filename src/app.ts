@@ -6,13 +6,6 @@ import { LogFilter } from "./LogFilter";
 
 const app = express();
 
-// define a route handler for the default home page
-app.get("/greeter", (req, res) => {
-  let { name } = req.query;
-  name ??= "API User";
-  res.send({ "greeting": "Hello", "target": name })
-});
-
 app.get('/log/:logfile', (async (req, res, next) => {
   try {
     const lr = LogReader(req.params.logfile);
