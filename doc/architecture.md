@@ -5,6 +5,8 @@
 - Path + Query param input.
 - JSON output.
 
+**NOTE** _The rest of this is outdated as the design evolved while implementing._
+
 # Request
 _all fields are optional_
 - filename : string

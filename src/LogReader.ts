@@ -2,6 +2,7 @@
 
 import { open, stat } from 'fs/promises';
 import { EOL } from 'os';
+import { sep } from 'path';
 
 import { LogReaderConfig } from "./LogReaderConfig";
 import { logger } from "./AppLogger";
@@ -23,7 +24,7 @@ export const LogReader = async function*(fileName: string) : AsyncGenerator<stri
   if (isBadFileName(fileName)) {
     throw new Error(`bad filename '${fileName}'`);
   }
-  const fileNameWithPath = config.baseDir + '/' + fileName;
+  const fileNameWithPath = config.baseDir + sep + fileName;
 
   const buffer = Buffer.alloc(config.bufferSize);
   let bufferPosition = -1;
